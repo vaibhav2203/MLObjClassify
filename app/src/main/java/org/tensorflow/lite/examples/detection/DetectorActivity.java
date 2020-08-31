@@ -203,6 +203,10 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
                                 new LinkedList<>();
                         for (final Classifier.Recognition result : results) {
                             final RectF location = result.getLocation();
+//                            location.bottom = location.bottom * canvas.getHeight();
+//                            location.top = location.top * canvas.getHeight();
+//                            location.right = location.right * canvas.getWidth();
+//                            location.left = location.left * canvas.getWidth();
                             if (location != null && result.getConfidence() >= minimumConfidence) {
                                 canvas.drawRect(location, paint);
                                 Log.d("ACTIVITY_CONFIDENT", result.toString());

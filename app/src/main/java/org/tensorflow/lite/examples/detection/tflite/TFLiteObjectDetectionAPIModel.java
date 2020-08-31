@@ -130,6 +130,7 @@ public class TFLiteObjectDetectionAPIModel implements Classifier {
     br.close();
 */
         d.labels.clear();
+        d.labels.add("???");
         d.labels.add("a");
         d.labels.add("b");
         d.labels.add("c");
@@ -214,18 +215,22 @@ public class TFLiteObjectDetectionAPIModel implements Classifier {
         for (int i = 0; i < NUM_DETECTIONS; i++) {
             if (outputClasses[0][i][0] >= MINIMUM_CONFIDENCE_TF_OD_API) {
                 optCLs.add(Pair.create(i,0));
+                Log.d("ACTIVITY_OPTCLS", outputClasses[0][i][0] + "");
                 outputScores[0][i] = outputClasses[0][i][0];
             } else if (outputClasses[0][i][1] >= MINIMUM_CONFIDENCE_TF_OD_API) {
                 outputScores[0][i] = outputClasses[0][i][1];
+                Log.d("ACTIVITY_OPTCLS", outputClasses[0][i][1] + "");
                 optCLs.add(Pair.create(i,1));
             } else if (outputClasses[0][i][2] >= MINIMUM_CONFIDENCE_TF_OD_API) {
+                Log.d("ACTIVITY_OPTCLS", outputClasses[0][i][2] + "");
                 outputScores[0][i] = outputClasses[0][i][2];
                 optCLs.add(Pair.create(i,2));
             } else if (outputClasses[0][i][3] >= MINIMUM_CONFIDENCE_TF_OD_API) {
+                Log.d("ACTIVITY_OPTCLS", outputClasses[0][i][3] + "");
                 outputScores[0][i] = outputClasses[0][i][3];
                 optCLs.add(Pair.create(i,3));
             }
-            Log.d("ACTIVITY_OPTCLS", outputClasses[0][i][0] + " " + outputClasses[0][i][1] + " " + outputClasses[0][i][2] + " " + outputClasses[0][i][3] );
+//            Log.d("ACTIVITY_OPTCLS", outputClasses[0][i][0] + " " + outputClasses[0][i][1] + " " + outputClasses[0][i][2] + " " + outputClasses[0][i][3] );
         }
         Log.d("ACTIVITY_OPTCLS123", optCLs.toString());
 //        outputScores = new float[1][NUM_DETECTIONS];
@@ -245,10 +250,10 @@ public class TFLiteObjectDetectionAPIModel implements Classifier {
 
             final RectF detection =
                     new RectF(
-                            outputLocations[0][optCLs.get(i).first][0] * inputSize,
-                            outputLocations[0][optCLs.get(i).first][1] * inputSize,
-                            (outputLocations[0][optCLs.get(i).first][2] + outputLocations[0][i][0]) * inputSize,
-                            (outputLocations[0][optCLs.get(i).first][1] + outputLocations[0][i][3]) * inputSize);
+                            outputLocations[0][optCLs.get(i).first][0]  ,
+                            outputLocations[0][optCLs.get(i).first][1] ,
+                            (outputLocations[0][optCLs.get(i).first][3] + outputLocations[0][i][0]) ,
+                            (outputLocations[0][optCLs.get(i).first][1] + outputLocations[0][i][2]) );
 
             int labelOffset = 1;
             Recognition recognition = new Recognition(
