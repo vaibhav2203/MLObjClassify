@@ -21,6 +21,7 @@ import android.graphics.Bitmap;
 import android.graphics.RectF;
 import android.os.Trace;
 import android.util.Log;
+import android.util.Pair;
 
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.examples.detection.env.Logger;
@@ -37,6 +38,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
+
+import static org.tensorflow.lite.examples.detection.DetectorActivity.MINIMUM_CONFIDENCE_TF_OD_API;
 
 /**
  * Wrapper for frozen detection models trained using the Tensorflow Object Detection API:
@@ -65,7 +68,7 @@ public class TFLiteObjectDetectionAPIModel implements Classifier {
     private int[] intValues;
     // outputLocations: array of shape [Batchsize, NUM_DETECTIONS,4]
     // contains the location of detected boxes
-    private float[][][]  outputLocations;
+    private float[][][] outputLocations;
     // outputClasses: array of shape [Batchsize, NUM_DETECTIONS]
     // contains the classes of detected boxes
     private float[][][] outputClasses;
@@ -96,6 +99,7 @@ public class TFLiteObjectDetectionAPIModel implements Classifier {
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
     }
 
+
     /**
      * Initializes a native TensorFlow session for classifying images.
      *
@@ -110,10 +114,10 @@ public class TFLiteObjectDetectionAPIModel implements Classifier {
             final String modelFilename,
             final String labelFilename,
             final int inputSize,
-            final boolean isQuantized)
+            final boolean isQuantized,
+            final float minConfidence)
             throws IOException {
         final TFLiteObjectDetectionAPIModel d = new TFLiteObjectDetectionAPIModel();
-
 /*
     String actualFilename = labelFilename.split("file:///android_asset/")[1];
     InputStream labelsInput = assetManager.open(actualFilename);
@@ -191,6 +195,7 @@ public class TFLiteObjectDetectionAPIModel implements Classifier {
         Trace.beginSection("feed");
         outputLocations = new float[1][NUM_DETECTIONS][4];
         outputClasses = new float[1][NUM_DETECTIONS][4];
+        ArrayList<Pair<Integer, Integer>> optCLs = new ArrayList<>();
         outputScores = new float[1][NUM_DETECTIONS];
         numDetections = new float[1];
 
@@ -198,14 +203,32 @@ public class TFLiteObjectDetectionAPIModel implements Classifier {
         Map<Integer, Object> outputMap = new HashMap<>();
         outputMap.put(0, outputLocations);
         outputMap.put(1, outputClasses);
-//        outputMap.put(2, outputScores);
-  //      outputMap.put(3, numDetections);
+        //outputMap.put(0, outputScores);
+        //      outputMap.put(3, numDetections);
         Trace.endSection();
 
         // Run the inference call.
         Trace.beginSection("run");
         Log.d("Activity", Arrays.toString(inputArray) + " : SIZE : " + inputArray.length + "\n" + outputMap.toString());
         tfLite.runForMultipleInputsOutputs(inputArray, outputMap);
+        for (int i = 0; i < NUM_DETECTIONS; i++) {
+            if (outputClasses[0][i][0] >= MINIMUM_CONFIDENCE_TF_OD_API) {
+                optCLs.add(Pair.create(i,0));
+                outputScores[0][i] = outputClasses[0][i][0];
+            } else if (outputClasses[0][i][1] >= MINIMUM_CONFIDENCE_TF_OD_API) {
+                outputScores[0][i] = outputClasses[0][i][1];
+                optCLs.add(Pair.create(i,1));
+            } else if (outputClasses[0][i][2] >= MINIMUM_CONFIDENCE_TF_OD_API) {
+                outputScores[0][i] = outputClasses[0][i][2];
+                optCLs.add(Pair.create(i,2));
+            } else if (outputClasses[0][i][3] >= MINIMUM_CONFIDENCE_TF_OD_API) {
+                outputScores[0][i] = outputClasses[0][i][3];
+                optCLs.add(Pair.create(i,3));
+            }
+            Log.d("ACTIVITY_OPTCLS", outputClasses[0][i][0] + " " + outputClasses[0][i][1] + " " + outputClasses[0][i][2] + " " + outputClasses[0][i][3] );
+        }
+        Log.d("ACTIVITY_OPTCLS123", optCLs.toString());
+//        outputScores = new float[1][NUM_DETECTIONS];
         Trace.endSection();
 
         // Show the best detections.
@@ -215,26 +238,26 @@ public class TFLiteObjectDetectionAPIModel implements Classifier {
         // because on some models, they don't always output the same total number of detections
         // For example, your model's NUM_DETECTIONS = 20, but sometimes it only outputs 16 predictions
         // If you don't use the output's numDetections, you'll get nonsensical data
-        int numDetectionsOutput = Math.min(NUM_DETECTIONS, (int) numDetections[0]); // cast from float to integer, use min for safety
+        int numDetectionsOutput = Math.min(NUM_DETECTIONS, optCLs.size()); // cast from float to integer, use min for safety
 
         final ArrayList<Recognition> recognitions = new ArrayList<>(numDetectionsOutput);
         for (int i = 0; i < numDetectionsOutput; ++i) {
+
             final RectF detection =
                     new RectF(
-                            outputLocations[0][i][1] * inputSize,
-                            outputLocations[0][i][0] * inputSize,
-                            outputLocations[0][i][3] * inputSize,
-                            outputLocations[0][i][2] * inputSize);
-            // SSD Mobilenet V1 Model assumes class 0 is background class
-            // in label file and class labels start from 1 to number_of_classes+1,
-            // while outputClasses correspond to class index from 0 to number_of_classes
+                            outputLocations[0][optCLs.get(i).first][0] * inputSize,
+                            outputLocations[0][optCLs.get(i).first][1] * inputSize,
+                            (outputLocations[0][optCLs.get(i).first][2] + outputLocations[0][i][0]) * inputSize,
+                            (outputLocations[0][optCLs.get(i).first][1] + outputLocations[0][i][3]) * inputSize);
+
             int labelOffset = 1;
-            recognitions.add(
-                    new Recognition(
-                            "" + i,
-                            labels.get((int) outputClasses[0][i][3] + labelOffset),
-                            outputScores[0][i],
-                            detection));
+            Recognition recognition = new Recognition(
+                    "" + i,
+                    labels.get(optCLs.get(i).second + labelOffset),
+                    outputScores[0][optCLs.get(i).first],
+                    detection);
+            recognitions.add(recognition);
+            Log.d("ACITIVTY", recognition.toString());
         }
         Trace.endSection();
         return recognitions;
